@@ -1,0 +1,25 @@
+Kustomizer.Run
+    KustTarget.Load
+    KustTarget.MakeCustomizeResMap
+        KustTarget.AccumulateTarget
+            KustTarget.accumulateResources
+            builtinconfig.MakeTransformerConfig
+            ResAccumulator.MergeConfig
+            ResAccumulator.LoadConfigFromCRDs
+            ResAccumulator.MergeConfig
+            KustTarget.runGenerators
+            KustTarget.runTransformers
+                builtinhelpers.PatchStrategicMergeTransformer,
+                builtinhelpers.PatchTransformer,
+                builtinhelpers.NamespaceTransformer,
+                builtinhelpers.PrefixSuffixTransformer,
+                    transform.MutateField
+                        m[firstPathSegment] = fn(m[firstPathSegment])
+                builtinhelpers.LabelTransformer,
+                builtinhelpers.AnnotationsTransformer,
+                builtinhelpers.PatchJson6902Transformer,
+                builtinhelpers.ReplicaCountTransformer,
+                builtinhelpers.ImageTagTransformer,                
+            ResAccumulator.MergeVars
+        ResAccumulator.FixBackReferences
+        ResAccumulator.ResolveVars

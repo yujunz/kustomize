@@ -139,4 +139,61 @@ kind: ConfigMap
 metadata:
   name: cm
 `)
+
+	rm = th.LoadAndRunTransformer(`
+apiVersion: builtin
+kind: PrefixSuffixTransformer
+metadata:
+  name: notImportantHere
+prefix: test-
+fieldSpecs:
+  - kind: Secret
+    path: metadata/name
+`, `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment
+spec:
+  template:
+    spec:
+      containers:
+      - image: myapp
+        name: main
+        envFrom:
+        - secretRef:
+            name: sec
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sec
+data:
+  secretKey: c2VjcmV0VmFsdWUK
+type: Opaque
+`)
+
+	th.AssertActualEqualsExpected(rm, `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment
+spec:
+  template:
+    spec:
+      containers:
+      - envFrom:
+        - secretRef:
+            name: test-sec
+        image: myapp
+        name: main
+---
+apiVersion: v1
+data:
+  secretKey: c2VjcmV0VmFsdWUK
+kind: Secret
+metadata:
+  name: test-sec
+type: Opaque
+`)
 }
