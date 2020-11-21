@@ -76,8 +76,6 @@ entire repo. For more details please see [go-getter documentation](https://githu
 
 Note that S3 and GCS are NOT supported to avoid introducing massive dependency.
 
-Here are some example urls
-
 <!-- @createOverlay @testAgainstLatestRelease -->
 ```
 DEMO_HOME=$(mktemp -d)
@@ -101,4 +99,57 @@ resources:
 - https://github.com/kustless/kustomize-examples/archive/master.zip//kustomize-examples-master
 
 EOF
+```
+
+### Reference
+
+Supported URL formats
+
+<!-- @remoteBuild @validURL @testAgainstLatestRelease -->
+```
+VALID_URL=( \
+# Repository
+github.com/kustless/kustomize-examples \
+github.com/kustless/kustomize-examples/ \
+git@github.com:kustless/kustomize-examples \
+git@github.com:kustless/kustomize-examples.git \
+ssh://git@github.com:kustless/kustomize-examples \
+ssh://git@github.com:kustless/kustomize-examples.git \
+git::ssh://git@github.com/kustless/kustomize-examples \
+git::ssh://git@github.com/kustless/kustomize-examples.git \
+https://github.com/kustless/kustomize-examples/ \
+https://github.com/kustless/kustomize-examples.git/ \
+# Subdir
+github.com/kustless/kustomize-examples/base \
+github.com/kustless/kustomize-examples/base/ \
+https://github.com/kustless/kustomize-examples/base \
+https://github.com/kustless/kustomize-examples/base/ \
+# Subdir with relative import from uplevel
+https://github.com/kustless/kustomize-examples/overlay \
+https://github.com/kustless/kustomize-examples/overlay/ \
+)
+for url in "${VALID_URL[@]}"
+do
+  test 1 == $(kustomize build $url | grep remote | wc -l); echo $?
+done
+```
+
+Unsupported URL formats
+
+<!-- @remoteBuild @invalidURL @testAgainstLatestRelease -->
+```
+INVALID_URL=( \
+# Repository
+https://github.com/kustless/kustomize-examples \
+https://github.com/kustless/kustomize-examples.git \
+# Subdir
+# Subdir with relative import
+github.com/kustless/kustomize-examples/overlay \
+github.com/kustless/kustomize-examples//overlay \
+https://github.com/kustless/kustomize-examples//overlay \
+)
+for url in "${INVALID_URL[@]}"
+do
+  kustomize build $url 2>&1; echo $?
+done
 ```
