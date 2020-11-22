@@ -5,12 +5,28 @@
 package loader
 
 import (
-	"fmt"
+	"context"
+	"log"
+	"os"
 
+	getter "github.com/yujunz/go-getter"
 	"sigs.k8s.io/kustomize/api/filesys"
 	"sigs.k8s.io/kustomize/api/ifc"
-	"sigs.k8s.io/kustomize/api/internal/git"
 )
+
+type targetSpec struct {
+	// Raw is the original resource in kustomization.yaml
+	Raw string
+
+	// Dir is where the resource is saved
+	Dir filesys.ConfirmedDir
+
+	// TempDir is the directory created to hold all resources, including Dir
+	TempDir filesys.ConfirmedDir
+}
+
+// Getter is a function that can gets resource
+type targetGetter func(rs *targetSpec) error
 
 // NewLoader returns a Loader pointed at the given target.
 // If the target is remote, the loader will be restricted
@@ -22,24 +38,79 @@ func NewLoader(
 	lr LoadRestrictorFunc,
 	target string, fSys filesys.FileSystem) (ifc.Loader, error) {
 
-	ldr, errGet := newLoaderAtGetter(target, fSys, nil, git.ClonerUsingGitExec, getRemoteTarget)
-	if errGet == nil {
-		return ldr, nil
+	rs := &targetSpec{
+		Raw: raw,
 	}
 
-	repoSpec, errGit := git.NewRepoSpecFromUrl(target)
-	if errGit == nil {
-		// The target qualifies as a remote git target.
-		return newLoaderAtGitClone(
-			repoSpec, fSys, nil, git.ClonerUsingGitExec, getRemoteTarget)
+	cleaner := func() error {
+		return fSys.RemoveAll(rs.TempDir.String())
 	}
 
-	root, errDir := demandDirectoryRoot(fSys, target)
-	if errDir == nil {
-		return newLoaderAtConfirmedDir(lr, root, fSys, nil, git.ClonerUsingGitExec, getRemoteTarget), nil
+	if err := getter(rs); err != nil {
+		cleaner()
+		return nil, err
 	}
 
-	return nil, fmt.Errorf(
-		"error creating new loader with git: %v, dir: %v, get: %v",
-		errGit, errDir, errGet)
+	return &fileLoader{
+		loadRestrictor: RestrictionRootOnly,
+		// TODO(yujunz): limit to getter root
+		root:     rs.Dir,
+		referrer: nil,
+		fSys:     fSys,
+		rscSpec:  rs,
+		getter:   getter,
+		cleaner:  cleaner,
+	}, nil
+}
+
+func getTarget(rs *targetSpec) error {
+	var err error
+
+	rs.TempDir, err = filesys.NewTmpConfirmedDir()
+	if err != nil {
+		return err
+	}
+
+	rs.Dir = filesys.ConfirmedDir(rs.TempDir.Join("repo"))
+
+	// Get the pwd
+	pwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Error getting wd: %s", err)
+	}
+
+	opts := []getter.ClientOption{}
+	client := &getter.Client{
+		Ctx:  context.TODO(),
+		Src:  rs.Raw,
+		Dst:  rs.Dir.String(),
+		Pwd:  pwd,
+		Mode: getter.ClientModeAny,
+		Detectors: []getter.Detector{
+			new(getter.GitHubDetector),
+			new(getter.GitLabDetector),
+			new(getter.GitDetector),
+			new(getter.BitBucketDetector),
+			new(getter.FileDetector),
+		},
+		Options: opts,
+	}
+	return client.Get()
+}
+
+func getNothing(rs *targetSpec) error {
+	var err error
+	rs.Dir, err = filesys.NewTmpConfirmedDir()
+	if err != nil {
+		return err
+	}
+
+	// Get the pwd
+	pwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Error getting wd: %s", err)
+	}
+
+	_, err = getter.Detect(rs.Raw, pwd, []getter.Detector{})
+	return err
 }

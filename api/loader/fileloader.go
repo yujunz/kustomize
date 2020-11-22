@@ -82,25 +82,18 @@ type fileLoader struct {
 	// Restricts behavior of Load function.
 	loadRestrictor LoadRestrictorFunc
 
-	// If this is non-nil, the files were
-	// obtained from the given repository.
-	repoSpec *git.RepoSpec
-
 	// File system utilities.
 	fSys filesys.FileSystem
 
 	// Used to load from HTTP
 	http *http.Client
 
-	// Used to clone repositories.
-	cloner git.Cloner
-
 	// If this is non-nil, the files were
 	// obtained from the given resource
-	rscSpec *remoteTargetSpec
+	rscSpec *targetSpec
 
 	// Used to get resources
-	getter remoteTargetGetter
+	getter targetGetter
 
 	// Used to clean up, as needed.
 	cleaner func() error
@@ -134,20 +127,19 @@ func newLoaderOrDie(
 		log.Fatalf("unable to make loader at '%s'; %v", path, err)
 	}
 	return newLoaderAtConfirmedDir(
-		lr, root, fSys, nil, git.ClonerUsingGitExec, getRemoteTarget)
+		lr, root, fSys, nil, getTarget)
 }
 
 // newLoaderAtConfirmedDir returns a new fileLoader with given root.
 func newLoaderAtConfirmedDir(
 	lr LoadRestrictorFunc,
 	root filesys.ConfirmedDir, fSys filesys.FileSystem,
-	referrer *fileLoader, cloner git.Cloner, getter remoteTargetGetter) *fileLoader {
+	referrer *fileLoader, getter targetGetter) *fileLoader {
 	return &fileLoader{
 		loadRestrictor: lr,
 		root:           root,
 		referrer:       referrer,
 		fSys:           fSys,
-		cloner:         cloner,
 		getter:         getter,
 		cleaner:        func() error { return nil },
 	}
@@ -217,7 +209,7 @@ func (fl *fileLoader) New(path string) (ifc.Loader, error) {
 // directory holding a cloned git repo.
 func newLoaderAtGitClone(
 	repoSpec *git.RepoSpec, fSys filesys.FileSystem,
-	referrer *fileLoader, cloner git.Cloner, getter remoteTargetGetter) (ifc.Loader, error) {
+	referrer *fileLoader, cloner git.Cloner, getter targetGetter) (ifc.Loader, error) {
 	cleaner := repoSpec.Cleaner(fSys)
 	err := cloner(repoSpec)
 	if err != nil {
